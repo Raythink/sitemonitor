@@ -29,7 +29,8 @@ sitemonitor/
 ├── package.json
 ├── tsconfig.json
 ├── AGENTS.md
-└── README.md
+├── README.md          # 英文文档
+└── README.zh.md       # 中文文档
 ```
 
 ## 核心流程

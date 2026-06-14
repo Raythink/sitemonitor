@@ -1,58 +1,62 @@
 # SiteMonitor
 
-基于 Cloudflare Workers 的网站/服务器可用性监控工具。零基础设施成本，利用 Cloudflare 边缘网络定时检查目标服务状态，邮件告警。
+Serverless website & server uptime monitoring powered by Cloudflare Workers. Zero infrastructure cost — check services from Cloudflare's edge network every 5 minutes, get email alerts on failures, and receive daily performance digests.
 
-## 功能
+> [中文版文档](README.zh.md)
 
-- **HTTP 监控** — 检查 Web 站点状态码、响应时间、内容关键词
-- **TCP 监控** — 通过 TCP 端口检测远程服务器存活（零侵入，仅三次握手）
-- **告警限频** — 同一站点每小时最多一封告警邮件，避免骚扰
-- **恢复通知** — 服务恢复时自动发送恢复邮件
-- **每日摘要** — 每天 UTC 00:00 发送性能报告，含响应时间走势图
-- **状态页** — 通过浏览器访问即可查看所有站点当前状态
-- **多站点** — 单个 Worker 同时监控任意数量的 HTTP 站点和 TCP 服务
-- **免费** — 完全运行在 Cloudflare 免费额度内
+## Features
 
-## 工作原理
+- **HTTP Monitoring** — Check status code, response time, and content keywords
+- **TCP Monitoring** — Zero-intrusion port check (TCP handshake only, no data sent)
+- **Smart Alert Throttling** — Max 1 alert per site per hour to prevent noise
+- **Recovery Notifications** — Automatic recovery email when service comes back
+- **Daily Digest** — Performance report every midnight (UTC) with response time chart
+- **Live Status Page** — Visit the Worker URL to see all sites at a glance
+- **Multi-site** — Monitor any number of HTTP & TCP targets from a single Worker
+- **Free Tier** — Runs entirely within Cloudflare's free plan
+
+## Architecture
 
 ```
-                    Cron Trigger（每 5 分钟）
+                    Cron Trigger (every 5 min)
                            │
                     ┌──────┴──────┐
                     │             │
-               HTTP 检查      TCP 端口检查
-               （fetch）    （connect API）
+               HTTP check     TCP port check
+               (fetch)       (node:net)
                     │             │
                     └──────┬──────┘
                            │
-                    状态对比 & 判断
+                    State comparison
                            │
                ┌───────────┼───────────┐
                │           │           │
-           新故障      持续故障      恢复
+          New down    Still down     Recovery
                │           │           │
-           立即告警   距上次>1h再告警 恢复通知
+          Alert now   >1h since      Notify
+                      last alert?
+                        Yes→Alert
 
-                    Cron Trigger（UTC 00:00）
+                    Cron Trigger (00:00 UTC)
                            │
-                    读取前一日历史记录
+                    Read yesterday's history
                            │
-                    生成摘要（可用率 +
-                    最小/平均/最大延迟 +
-                    按小时 ASCII 走势图）
+                    Generate summary
+                    (uptime %, min/avg/max latency,
+                     hourly ASCII chart)
                            │
-                    发送汇总邮件
+                    Send digest email
 ```
 
-## 前置条件
+## Prerequisites
 
-1. Cloudflare 账号
-2. 一个域名已接入 Cloudflare（用于 Email Routing 发件）
-3. 在 Cloudflare Email Routing 中已验证收件地址
+1. A Cloudflare account
+2. A domain on Cloudflare (for Email Routing sender)
+3. A verified recipient address in Cloudflare Email Routing
 
-## 快速开始
+## Quick Start
 
-### 1. 初始化项目
+### 1. Create the project
 
 ```bash
 npm create cloudflare@latest sitemonitor -- --ts
@@ -60,15 +64,15 @@ cd sitemonitor
 npm install
 ```
 
-### 2. 创建 KV 命名空间
+### 2. Create a KV namespace
 
 ```bash
 npx wrangler kv namespace create SITEMONITOR_KV
 ```
 
-将返回的 ID 填入 `wrangler.jsonc`。
+Put the returned ID into `wrangler.jsonc`.
 
-### 3. 配置 wrangler.jsonc
+### 3. Configure wrangler.jsonc
 
 ```jsonc
 {
@@ -79,13 +83,13 @@ npx wrangler kv namespace create SITEMONITOR_KV
   "kv_namespaces": [
     {
       "binding": "SITEMONITOR_KV",
-      "id": "<上一步返回的 ID>"
+      "id": "YOUR_KV_NAMESPACE_ID"
     }
   ],
   "send_email": [
     {
       "name": "EMAIL",
-      "destination_address": "admin@example.com"
+      "destination_address": "YOUR_VERIFIED_EMAIL"
     }
   ],
   "triggers": {
@@ -94,26 +98,26 @@ npx wrangler kv namespace create SITEMONITOR_KV
 }
 ```
 
-### 4. 设置监控配置
+### 4. Set the monitoring config
 
 ```bash
 npx wrangler secret put CONFIG
 ```
 
-输入 JSON 格式配置（示例）：
+Paste the JSON configuration (example):
 
 ```json
 {
   "sites": [
     {
-      "name": "我的博客",
+      "name": "My WordPress",
       "type": "http",
-      "url": "https://example.com/wp-site-1",
+      "url": "https://example.com",
       "responseTimeThresholdMs": 10000,
       "expectedStatus": 200
     },
     {
-      "name": "Ubuntu服务器",
+      "name": "Production Server",
       "type": "tcp",
       "host": "server.example.com",
       "port": 22,
@@ -125,87 +129,116 @@ npx wrangler secret put CONFIG
 }
 ```
 
-### 5. 部署
+### 5. Deploy
 
 ```bash
 npm run deploy
 ```
 
-## 配置详解
+## Configuration Reference
 
-### HTTP 类型检查
+### HTTP Site
 
-| 字段 | 默认值 | 说明 |
-|------|--------|------|
-| `type` | — | 固定 `"http"` |
-| `url` | — | 完整 URL（含协议） |
-| `expectedStatus` | `200` | 期望 HTTP 状态码 |
-| `responseTimeThresholdMs` | `10000` | 响应时间阈值（毫秒） |
-| `expectedKeyword` | 无 | 响应体必须包含的关键词（如 `"wp-content"`） |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `type` | — | Must be `"http"` |
+| `url` | — | Full URL with protocol |
+| `expectedStatus` | `200` | Expected HTTP status code |
+| `responseTimeThresholdMs` | `10000` | Max acceptable response time (ms) |
+| `expectedKeyword` | none | Keyword the response body must contain |
 
-### TCP 类型检查
+### TCP Site
 
-| 字段 | 默认值 | 说明 |
-|------|--------|------|
-| `type` | — | 固定 `"tcp"` |
-| `host` | — | 主机名或 IP 地址 |
-| `port` | `22` | TCP 端口 |
-| `timeoutMs` | `5000` | 连接超时（毫秒） |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `type` | — | Must be `"tcp"` |
+| `host` | — | Hostname or IP address |
+| `port` | `22` | TCP port |
+| `timeoutMs` | `5000` | Connection timeout (ms) |
 
-### 告警限频说明
+### Alert Throttling
 
-- 站点从健康变为不健康时：**立即**发送告警
-- 站点持续不健康：距上次发送 **超过 1 小时**才再次发送
-- 站点从不健康恢复为健康：**立即**发送恢复通知（不限频）
-- 每个站点独立计数，互不影响
+- **Healthy → Unhealthy**: alert **immediately**
+- **Still unhealthy**: alert again only if **> 1 hour** since last alert
+- **Unhealthy → Healthy**: recovery notification sent immediately (no throttle)
+- Each site tracks its own alert timer independently
 
-## 状态页
+## Status Page
 
-部署后可通过浏览器访问查看实时状态：
-
-```
-GET /          → HTML 状态页（显示所有站点的健康状态、延迟、上次检查时间）
-GET /check     → 手动触发一次检查（返回 202，后台异步执行）
-GET /          → 带 Accept: application/json 返回 JSON 格式
-```
-
-## 每日摘要邮件示例
+Once deployed, visit your Worker URL:
 
 ```
-===== 每日性能报告 =====
-日期: 2026-06-13
+GET /          → HTML status page (all sites' health, latency, last check)
+GET /check     → Trigger a manual check (returns 202, runs in background)
+Accept: json   → Returns JSON instead of HTML
+```
 
-站点: Ubuntu服务器
-  总检查: 288 次
-  可用率: 99.3%
-  响应时间:
-    最小值:  2 ms
-    平均值: 15 ms
-    最大值: 127 ms
+## Daily Digest Sample
 
-  响应时间走势（UTC，按小时平均）:
+```
+===== Daily Performance Report =====
+Date: 2026-06-13
+
+Site: Production Server
+  Total checks:  288
+  Uptime:        99.3%
+  Latency:
+    Min:    2 ms
+    Avg:   15 ms
+    Max:  127 ms
+
+  Hourly latency trend (UTC):
   00:00 ████████ 18ms
   01:00 ████ 9ms
   ...
   23:00 ██████████████ 35ms
 ```
 
-## 开发命令
+## Development
 
 ```bash
-npm run dev                           # 本地开发（wrangler dev）
-npm run deploy                        # 部署
-npx wrangler types                    # 生成类型定义
-npx wrangler secret put CONFIG        # 更新配置
+npm run dev                           # Local dev (wrangler dev)
+npm run deploy                        # Deploy to Cloudflare
+npx wrangler types                    # Regenerate type definitions
+npx wrangler secret put CONFIG        # Update config
 ```
 
-### 本地开发
+### Local Setup
 
-1. 创建 `.dev.vars` 文件（参考 `.dev.vars.example`），填入本地 `CONFIG` 环境变量
-2. 运行 `npm run dev`
-3. 访问 `http://localhost:8787` 查看状态页
-4. 触发 cron 检查：`curl "http://localhost:8787/cdn-cgi/handler/scheduled"`
+1. Copy `.dev.vars.example` to `.dev.vars` and fill in your config
+2. Run `npm run dev`
+3. Visit `http://localhost:8787` to see the status page
+4. Trigger a cron check: `curl "http://localhost:8787/cdn-cgi/handler/scheduled"`
 
-## 许可证
+## Project Structure
+
+```
+sitemonitor/
+├── src/
+│   ├── index.ts       # Worker entry (scheduled + fetch handler)
+│   ├── config.ts      # Config parsing & validation
+│   ├── monitor.ts     # HTTP & TCP check logic
+│   ├── alerter.ts     # Alert logic & rate limiting
+│   ├── summary.ts     # Daily history recording & digest
+│   └── types.ts       # Shared TypeScript types
+├── wrangler.jsonc     # Worker configuration
+├── .dev.vars          # Local environment variables
+├── package.json
+├── tsconfig.json
+├── AGENTS.md          # Developer guide (Chinese)
+└── README.zh.md       # Chinese documentation
+```
+
+## KV Schema
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `site:{name}:status` | `"healthy"\|"unhealthy"` | Current health |
+| `site:{name}:lastAlertTime` | ISO 8601 | Last alert timestamp |
+| `site:{name}:lastCheckTime` | ISO 8601 | Last check timestamp |
+| `site:{name}:lastCheckResult` | JSON | Last check details |
+| `site:{name}:daily:YYYY-MM-DD` | JSON array | All checks for the day |
+
+## License
 
 MIT
