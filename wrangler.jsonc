@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sitemonitor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [
+    {
+      "binding": "SITEMONITOR_KV",
+      "id": "YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "destination_address": "YOUR_VERIFIED_EMAIL"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *", "0 0 * * *"]
+  }
+}

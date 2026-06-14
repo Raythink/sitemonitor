@@ -1,0 +1,1 @@
+CONFIG={"sites":[{"name":"站点名称","type":"http","url":"https://example.com","responseTimeThresholdMs":10000,"expectedStatus":200}],"alertFrom":"monitor@yourdomain.com","alertTo":"admin@example.com"}
