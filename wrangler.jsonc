@@ -12,8 +12,7 @@
   ],
   "send_email": [
     {
-      "name": "EMAIL",
-      "destination_address": "YOUR_VERIFIED_EMAIL"
+      "name": "EMAIL"
     }
   ],
   "triggers": {
