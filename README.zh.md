@@ -127,6 +127,55 @@ npx wrangler secret put CONFIG
 }
 ```
 
+### 通过 Cloudflare Variables 配置（推荐，最多 5 个站点）
+
+你也可以把每个站点配置单独放到 Cloudflare 的 Worker Variables（Dashboard → Workers → 你的 Worker → Variables）中，变量名为 `SITE_1`、`SITE_2` … `SITE_5`，最多支持 5 个站点。告警发件与收件使用 `ALERT_FROM` 和 `ALERT_TO` 变量。
+
+要点：
+
+- 每个 `SITE_N` 的值是单个站点的 JSON 对象（非数组）。
+- 系统优先使用 `SITE_1`（存在时表示使用 Variables 模式）；若没有 `SITE_1` 则回退到 `CONFIG`（secret）方式。
+- 仅支持最多 5 个 `SITE_N`；超过请合并到单个 `CONFIG` 中。
+
+示例（HTTP 站点，作为 `SITE_1` 的值）：
+
+```json
+{
+  "name": "我的博客",
+  "type": "http",
+  "url": "https://example.com",
+  "responseTimeThresholdMs": 10000,
+  "expectedStatus": 200,
+  "expectedKeyword": "wp-content"
+}
+```
+
+示例（TCP 站点，作为 `SITE_2` 的值）：
+
+```json
+{
+  "name": "Ubuntu服务器",
+  "type": "tcp",
+  "host": "server.example.com",
+  "port": 22,
+  "timeoutMs": 5000
+}
+```
+
+示例：设置告警邮箱为 Variables：
+
+```
+ALERT_FROM = monitor@yourdomain.com
+ALERT_TO   = admin@example.com
+```
+
+如何设置：
+
+- 在 Cloudflare Dashboard 打开你的 Worker，进入「Settings」→「Variables」，点击 Add variable，分别创建 `SITE_1`..`SITE_5` 与 `ALERT_FROM`/`ALERT_TO`，将上面的 JSON 粘贴为变量值。
+- 也可以通过 Cloudflare API 批量管理 Variables（高级用法）。
+
+注意：为方便在 Dashboard 中查看与修改，建议把单个站点的配置放到 `SITE_N`，并保证 JSON 格式正确。
+
 ### 5. 部署
 
 ```bash

@@ -49,3 +49,43 @@ export function parseConfig(jsonStr: string): AppConfig {
     alertTo: String(raw.alertTo),
   };
 }
+
+export function buildConfigFromEnv(env: Record<string, any>): AppConfig {
+  const sites: SiteConfig[] = [];
+
+  for (let i = 1; i <= 5; i++) {
+    const key = `SITE_${i}`;
+    const raw = env[key];
+    if (!raw) continue;
+
+    let parsed: unknown;
+    try {
+      parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch (err) {
+      throw new Error(`解析 ${key} 失败: ${String(err)}`);
+    }
+
+    if (typeof parsed !== "object" || parsed === null) {
+      throw new Error(`${key} 必须是一个 JSON 对象`);
+    }
+
+    sites.push(parseSite(parsed as Record<string, unknown>));
+  }
+
+  if (sites.length === 0) {
+    throw new Error("通过环境变量未找到任何 SITE_N 配置");
+  }
+
+  const alertFrom = env.ALERT_FROM ?? env.alertFrom;
+  const alertTo = env.ALERT_TO ?? env.alertTo;
+
+  if (!alertFrom || !alertTo) {
+    throw new Error("必须通过环境变量提供 ALERT_FROM 和 ALERT_TO");
+  }
+
+  return {
+    sites,
+    alertFrom: String(alertFrom),
+    alertTo: String(alertTo),
+  };
+}

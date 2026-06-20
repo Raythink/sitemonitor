@@ -129,6 +129,55 @@ Paste the JSON configuration (example):
 }
 ```
 
+### Using Cloudflare Worker Variables (recommended, up to 5 sites)
+
+You can store each site config as a separate Cloudflare Worker Variable (Dashboard → Workers → your Worker → Variables). Use variable names `SITE_1`, `SITE_2`, … `SITE_5` (maximum 5). Set alert sender/recipient via `ALERT_FROM` and `ALERT_TO`.
+
+Key points:
+
+- Each `SITE_N` value must be a single JSON object describing one site (not an array).
+- The Worker prefers Variables mode when `SITE_1` exists; otherwise it falls back to the `CONFIG` secret method.
+- If you need more than 5 sites, combine them into a single `CONFIG` secret instead.
+
+Example (`SITE_1`, HTTP site):
+
+```json
+{
+  "name": "My WordPress",
+  "type": "http",
+  "url": "https://example.com",
+  "responseTimeThresholdMs": 10000,
+  "expectedStatus": 200,
+  "expectedKeyword": "wp-content"
+}
+```
+
+Example (`SITE_2`, TCP site):
+
+```json
+{
+  "name": "Production Server",
+  "type": "tcp",
+  "host": "server.example.com",
+  "port": 22,
+  "timeoutMs": 5000
+}
+```
+
+Example variables for alerts:
+
+```
+ALERT_FROM=monitor@yourdomain.com
+ALERT_TO=admin@example.com
+```
+
+How to set:
+
+- In the Cloudflare Dashboard, open your Worker, go to Settings → Variables, click Add variable and create `SITE_1`..`SITE_5` and `ALERT_FROM`/`ALERT_TO`, pasting the JSON as the variable value.
+- You can also manage Worker Variables via the Cloudflare API for automation.
+
+Note: keep each `SITE_N` JSON valid to avoid parsing errors in runtime.
+
 ### 5. Deploy
 
 ```bash

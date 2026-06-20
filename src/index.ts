@@ -1,4 +1,4 @@
-import { parseConfig } from "./config";
+import { parseConfig, buildConfigFromEnv } from "./config";
 import { checkHttp, checkTcp } from "./monitor";
 import { processResult } from "./alerter";
 import { sendDailySummary } from "./summary";
@@ -6,7 +6,19 @@ import { HttpSiteConfig, TcpSiteConfig, AppConfig } from "./types";
 
 declare global {
   interface Env {
-    CONFIG: string;
+    CONFIG?: string;
+    // Up to 5 site configs stored in Cloudflare Variables (JSON per variable)
+    SITE_1?: string;
+    SITE_2?: string;
+    SITE_3?: string;
+    SITE_4?: string;
+    SITE_5?: string;
+    ALERT_FROM?: string;
+    ALERT_TO?: string;
+
+    // existing bindings
+    SITEMONITOR_KV: KVNamespace;
+    EMAIL: unknown;
   }
 }
 
@@ -14,7 +26,13 @@ let cachedConfig: AppConfig | null = null;
 
 function getConfig(env: Env): AppConfig {
   if (!cachedConfig) {
-    cachedConfig = parseConfig(env.CONFIG);
+    // If SITE_1 is present, prefer reading individual CF Variables (max 5 sites)
+    if (env.SITE_1 || env.ALERT_FROM || env.ALERT_TO) {
+      cachedConfig = buildConfigFromEnv(env as Record<string, any>);
+    } else {
+      if (!env.CONFIG) throw new Error("CONFIG 环境变量未设置");
+      cachedConfig = parseConfig(env.CONFIG);
+    }
   }
   return cachedConfig;
 }
